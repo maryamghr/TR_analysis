@@ -48,7 +48,7 @@ def process_vcf(file_path):                        #, sample_info
 # Use partial to pass sample_info to process_vcf
 # process_vcf_with_info = partial(process_vcf, sample_info=sample_info)
 
-def compute_population_df(directory, sample_info, cores):
+def compute_population_df(directory, sample_info, cores, output="output/population/population_df.csv"):
     '''
     input: a dictionary including these vcf files:
     {sample}_h1.vcf.gz and {sample}_h2_vcf.gz for all samples in the cohort
@@ -65,14 +65,25 @@ def compute_population_df(directory, sample_info, cores):
     with Pool(processes=cores) as pool:                # Adjust the number of processes as needed
         df_list = pool.map(process_vcf, vcf_files)
     
-
+    print('concatenating dataframes')
     df_all = pd.concat(df_list, ignore_index=True)
+    print('merging sample info')
     df_all = df_all.merge(sample_info[["sample", "superpop"]], on="sample")
+
+    df_all.to_csv(output, index=False, sep='\t')
 
     return df_all
 
 
-def count_alleles(df, column="CN", sample_size=70):
+def count_alleles(df, column="CN", sample_size=70, output="output/population/allele_counts.csv"):
+    '''
+    df: population dataframe
+    column: column to count alleles on (possible values: CN, len_, motifs)
+    sample_size: sample size
+
+    output:
+        allele_count_summary: summary of the number of alleles in the population
+    '''
 
     allele_count = (
         df.groupby(["chrom", "start", "end"])
@@ -88,10 +99,12 @@ def count_alleles(df, column="CN", sample_size=70):
         .reindex(range(1, sample_size+1), fill_value=0)  # ensures 1..70 are all present, even if 0
     )
 
+    allele_count_summary.to_csv(output, index=False, sep='\t')
+
     return allele_count_summary
 
 
-def plot_allele_count(cn_allele_counts, len_allele_counts, motif_allele_counts, n=5):
+def plot_allele_count(cn_allele_counts, len_allele_counts, motif_allele_counts, n=5, output="output/population/multi_facet_allele_barplots.pdf"):
     '''
     makes a bar plot of the number of regions with 1,2, ..., n, >n allele counts
     '''
@@ -130,24 +143,29 @@ def plot_allele_count(cn_allele_counts, len_allele_counts, motif_allele_counts, 
     plt.suptitle("Allele Count Distribution Across TR Regions", fontsize=12)
     # plt.xlabel("Number of alleles")
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    # plt.savefig("multi_facet_allele_barplots.pdf", format='pdf', bbox_inches='tight')
+    plt.savefig(output, format='pdf', bbox_inches='tight')
     # plt.show()
 
-    return plt
+    #return plt
 
-def compute_cumulative_allele_classification(df, sample_info, sample_order=None, superpop_order=['AFR', 'AMR', 'EUR', 'EAS', 'SAS'], figsize=(15, 6), save_path=None): # value_col="CN"
+def compute_cumulative_allele_classification(df, sample_info, sample_order=None, superpop_order=['AFR', 'AMR', 'EUR', 'EAS', 'SAS'], figsize=(15, 6), output='output/population/cumulative_allele.csv'): # value_col="CN"
     """
     Creates a stacked bar plot showing cumulative allele diversity (singleton, biallelic, multiallelic) across samples.
 
     Parameters:
-        df (pd.DataFrame): DataFrame with columns ['sample', 'singleton', 'biallelic', 'multiallelic', 'superpop']
+        df: cols: chrom,start,end,motifs,motif_ids,CN,CN_ref,GT,len_,motif_concat,sample,(sex,pop),superpop
         value_col (str): Column to count alleles from ('CN' or 'len_')
         sample_order (list): List of sample names in desired plotting order (optional)
         superpop_order (list): Order of superpopulations for sorting (optional)
         palette (dict): Dictionary mapping class ('Singleton', etc) to color
         figsize (tuple): Figure size
         save_path (str): If provided, saves the figure as PDF
+    
+    output:
+        summary_df (pd.DataFrame): DataFrame with columns ['sample', 'singleton', 'biallelic', 'multiallelic', 'superpop']
     """
+
+    # TODO: only for CN so far (for now), we need to extend it to len_ and motifs
 
     all_samples = df['sample'].drop_duplicates().tolist()
 
@@ -192,30 +210,7 @@ def compute_cumulative_allele_classification(df, sample_info, sample_order=None,
     # Convert to NumPy array for fast slicing
     cn_array = df_cum[cn_cols].to_numpy()
 
-    # # Start with the first sample
-    # df_first_sample = df[['chrom', 'start', 'end', 'CN']][df['sample']==sample_id]
-    # df_cum = df_first_sample[['chrom', 'start', 'end', 'CN']].rename(columns={'CN': f'CN_{sample_id}'})
 
-    # # For each new sample:
-    # for sample_id in sample_order[1:]:
-    #     df_new = df[['chrom', 'start', 'end', 'CN']][df['sample']==sample_id]  # this returns chrom/start/end/CN for this sample
-    #     df_new = df_new.rename(columns={'CN': f'CN_{sample_id}'})
-        
-    #     # Merge with the cumulative df
-    #     df_cum = pd.merge(df_cum, df_new, on=['chrom', 'start', 'end'], how='outer')
-
-    # # Fill NaNs (e.g., regions not present in some samples)
-    # df_cum.fillna(-1, inplace=True)  # or any placeholder to indicate "missing"
-
-    # missing_val = -1
-    # cn_cols = [col for col in df_cum.columns if col.startswith("CN_")]
-    # results = []
-
-    # # Convert CN values to integer (optional, speeds things up)
-    # df_cum[cn_cols] = df_cum[cn_cols].astype(int)
-
-    # # Convert to NumPy array for faster slicing
-    # cn_array = df_cum[cn_cols].to_numpy()
 
     results = []
 
@@ -249,10 +244,12 @@ def compute_cumulative_allele_classification(df, sample_info, sample_order=None,
 
     summary_df = pd.merge(summary_df, subsample_info, on='sample')
 
+    summary_df.to_csv(output, index=False, sep='\t')
+
     return summary_df
 
 
-def plot_cumulative_allele_classification(df, value_col="CN", sample_order=None, superpop_order=None, palette=None, figsize=(15, 6), save_path=None):
+def plot_cumulative_allele_classification(df, value_col="CN", sample_order=None, superpop_order=None, palette=None, figsize=(15, 6), output='output/population/commulative_alleles.pdf'):
     """
     Creates a stacked bar plot showing cumulative allele diversity (singleton, biallelic, multiallelic) across samples.
 
@@ -334,12 +331,14 @@ def plot_cumulative_allele_classification(df, value_col="CN", sample_order=None,
 
     # Space for annotations
     plt.subplots_adjust(bottom=0.2, right=0.75)
+
+    plt.savefig(output, format='pdf')
     
     return plt
 
 
 
-def compute_pca(df):
+def compute_pca(df, output=None):
     '''
     df = df_all, concat of all sample dfs, generated by compute_population_df
     '''
@@ -404,68 +403,3 @@ def compute_pca(df):
 
 
 
-
-
-
-
-
-
-
-
-
-# draft --- to remove ...
-def merge_population_df(directory, sample_info, cores):
-    '''
-    input: a dictionary including these vcf files:
-    {sample}_h1.vcf.gz and {sample}_h2_vcf.gz for all samples in the cohort
-
-    sample info:
-    A file containing the sample information in the population
-    '''
-
-    # cols: chrom,start,end,motifs,motif_ids,CN,CN_ref,GT,len_,motif_concat,sample,sex,pop,superpop
-
-    vcf_files = list(Path(directory).glob("*.vcf.gz"))
-
-    # Run in parallel
-    with Pool(processes=cores) as pool:                # Adjust the number of processes as needed
-        df_list = pool.map(process_vcf, vcf_files)
-    
-    # final_df = pd.concat(df_list, ignore_index=True)
-
-    # final_df = final_df.merge(sample_info, on='sample', how='inner')
-
-    # final_df.to_csv(output, index=False)
-
-
-    # Step 1: Merge all dataframes on shared columns efficiently
-    # common_cols = ["chrom", "start", "end", "motifs", "CN_ref"]
-    # cn_columns = []
-
-    # Add sample name as suffix to CN column
-    for i, df in enumerate(df_list):
-        df = df.merge(sample_info, on='sample', how='inner')
-        sample_name = df["sample"].iloc[0]  # Assuming each dataframe belongs to one sample
-        print(f"sample {sample_name}")
-        
-        # print(df)
-        # df = df[common_cols + ["CN", "len_", "superpop"]].rename(columns={
-        #     "CN": f"CN_{sample_name}",
-        #     "len_": f"len_{sample_name}"
-        # })
-        
-        # print("df after column rename")
-        # print(df)
-        # cn_columns.append(f"CN_{sample_name}")
-        
-        df_list[i] = df  # Update modified dataframe
-
-    # Merge all dataframes on common columns
-    # merged_df = df_list[0]
-    # for df in df_list[1:]:
-    #     merged_df = merged_df.merge(df, on=common_cols, how="outer")
-
-    # Combine all dataframes into one
-    df_all = pd.concat(df_list, ignore_index=True)
-
-    return df_all
