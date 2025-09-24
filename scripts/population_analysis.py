@@ -166,6 +166,7 @@ def compute_cumulative_allele_classification(df, sample_info, sample_order=None,
     """
 
     # TODO: only for CN so far (for now), we need to extend it to len_ and motifs
+    # TODO: This part is very slow, especillay reshaping part... try to improve... think about multi-sample vcf file
 
     all_samples = df['sample'].drop_duplicates().tolist()
 
@@ -249,9 +250,9 @@ def compute_cumulative_allele_classification(df, sample_info, sample_order=None,
     return summary_df
 
 
-def plot_cumulative_allele_classification(df, value_col="CN", sample_order=None, superpop_order=None, palette=None, figsize=(15, 6), output='output/population/commulative_alleles.pdf'):
+def plot_cumulative_allele_classification(df, sample_order=None, superpop_order=None, palette=None, figsize=(15, 6), output='output/population/commulative_alleles.pdf'):
     """
-    Creates a stacked bar plot showing cumulative allele diversity (singleton, biallelic, multiallelic) across samples.
+    Creates a stacked bar plot showing cumulative allele diversity (sample, singleton, biallelic, multiallelic) across samples.
 
     Parameters:
         df (pd.DataFrame): DataFrame with columns ['sample', 'singleton', 'biallelic', 'multiallelic', 'superpop']
@@ -274,9 +275,9 @@ def plot_cumulative_allele_classification(df, value_col="CN", sample_order=None,
 
     # Allele type bar colors (clearly distinct)
     allele_colors = {
-        'singleton': '#e41a1c',    # red
-        'biallelic': '#377eb8',    # blue
-        'multiallelic': '#4daf4a'  # green
+        'singleton': 'gold', # '#e41a1c',    # red
+        'biallelic': 'skyblue', # '#377eb8',    # blue
+        'multiallelic': 'tomato' # '#4daf4a'  # green
     }
 
     # Plot
@@ -332,6 +333,7 @@ def plot_cumulative_allele_classification(df, value_col="CN", sample_order=None,
     # Space for annotations
     plt.subplots_adjust(bottom=0.2, right=0.75)
 
+    ax.set_xticklabels(ax.get_xticklabels(), fontsize=8)
     plt.savefig(output, format='pdf')
     
     return plt

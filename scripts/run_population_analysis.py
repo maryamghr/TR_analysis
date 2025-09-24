@@ -70,10 +70,13 @@ def main():
 if __name__ == "__main__":
     main()
 
-# vcf_dir = "/confidential/tGenVar/vntr/output_maryam/tools/run_all_tools/output/hgsvc_test/TandemTwist/asm/"
-# sample_info_file = "/confidential/tGenVar/vntr/output_maryam/tools/run_all_tools/input_folder/samples/hgsvc/HGSVC2_sample_info.tsv"
-# output_pop_df = 'output/population/population_df_test.csv'
-# output_allele_counts = 'output/population/allele_counts'
-# output_allele_counts_plot = 'output/population/multi_facet_allele_barplots.pdf'
-# out_cum_allele = 
-# output_cum_allele_plot = 
+# vcf_dir="/confidential/tGenVar/vntr/output_maryam/tools/run_all_tools/output/hgsvc_test/TandemTwist/asm/"
+# sample_info_file="/confidential/tGenVar/vntr/output_maryam/tools/run_all_tools/input_folder/samples/hgsvc/HGSVC2_sample_info.tsv"
+# output_pop_df='output/population/population_df_test.csv'
+# pop_df_file='output/population/population_df_test.csv'
+# output_allele_counts='output/population/allele_counts'
+# output_allele_counts_plot='output/population/multi_facet_allele_barplots.pdf'
+# out_cum_allele=
+# output_cum_allele_plot=
+# time python run_population_analysis.py compute_population_df --vcf_dir $vcfdir --sample_info_file $sampleinfo --cores 12 --output $output
+# time python run_population_analysis.py comm-allele-classification --population_df_file $popdf --sample_info_file $sampleinfo --output_cum_allele $outputcum --output_cum_allele_plot $outputcumalleleplot
