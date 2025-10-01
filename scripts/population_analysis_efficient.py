@@ -48,16 +48,6 @@ def sample_to_superpop(sample_info_file):
     return sample_to_superpop
 
 
-# Function to process a single file
-def process_vcf(file_path):                        #, sample_info
-    sample_name = os.path.basename(file_path)[:-7] # Remove '.vcf.gz'
-    print(f"reading vcf file for {sample_name}")
-    df = parse_asm_vcf_tandemtwister(pysam.VariantFile(file_path))
-    df["sample"] = sample_name
-
-    return df
-    # return df.merge(sample_info, on='sample', how='inner')
-
 
 
 def compute_population_df(directory, output):
@@ -78,16 +68,18 @@ def compute_population_df(directory, output):
 
     df_pop = pd.DataFrame()
 
-    for f in vcf_files:
+    for i, f in enumerate(vcf_files):
 
         if not f.is_file():
             raise FileNotFoundError(f"VCF file not found: {f}")
         
 
         sample = os.path.basename(f)[:-7]  # Remove '.vcf.gz'
-        print(f"Processing {sample}")
+        print(f"Processing sample {i}: {sample}")
 
-        df = process_vcf(f)
+        #df = process_vcf(f)
+
+        df = parse_asm_vcf_tandemtwister(pysam.VariantFile(f))
         df = df[["chrom", "start", "end", "motifs", "CN_ref", "CN", "len_", "motif_concat"]]
 
         # rename the last three columns to len and seq; add sample suffix
@@ -98,7 +90,7 @@ def compute_population_df(directory, output):
         if df_pop.empty:
             df_pop = df
         else:
-            df_pop = pd.merge(df_pop, df, on=["chrom", "start", "end", "motifs", "CN_ref"], how="outer", suffixes=('', ''))
+            df_pop = pd.merge(df_pop, df, on=["chrom", "start", "end", "motifs", "CN_ref"], how="inner", suffixes=('', ''))
 
     df_pop.to_csv(output, index=False, sep='\t')
 
@@ -164,43 +156,27 @@ def plot_allele_count(cn_allele_counts, len_allele_counts, motif_allele_counts, 
 
     #return plt
 
-def subset_columns(df, columns=["chrom", "start", "end", "motifs", "CN_ref"], prefix_col="CN_"):
-    """
-    Subsets the dataframe to only include specified columns and those starting with a given prefix.
-
-    Parameters:
-        df (pd.DataFrame): Input dataframe
-        columns (list): List of specific columns to retain
-        prefix_col (str): Prefix to identify additional columns to retain. Possible values: CN_, len_, seq_
-
-    Returns:
-        pd.DataFrame: Subsetted dataframe
-    """
-
-    cols_to_keep = [col for col in df.columns if col in columns or col.startswith(prefix_col)]
-
-    return df[cols_to_keep]
 
 
-def compute_cumulative_allele_classification(df, sample_info, col_prefix="CN", sample_order=None, superpop_order=['AFR', 'AMR', 'EUR', 'EAS', 'SAS'], 
-                                             output='output/population/cumulative_allele.csv'): # value_col="CN"
+def compute_cumulative_allele_classification(df, sample_info, col_prefix="CN", sample_order=None, 
+                                             superpop_order=['AFR', 'AMR', 'EUR', 'EAS', 'SAS'], 
+                                             output='output/population/cumulative_allele.csv'):
     """
     Creates a stacked bar plot showing cumulative allele diversity (singleton, biallelic, multiallelic) across samples.
 
     Parameters:
         df: population df, cols: chrom,start,end,motifs,CN_ref,CN_{sample},len_{sample},seq_{sample} for all {sample} in samples
-        prefix_col (str): Column to count alleles from ('CN_', 'len_', or 'seq_')
+        sample_info: sample information dataframe
+        col_prefix (str): Column to count alleles from ('CN_', 'len_', or 'seq_')
     
     output:
         summary_df (pd.DataFrame): DataFrame with columns ['sample', 'singleton', 'biallelic', 'multiallelic', 'superpop']
     """
 
-    # TODO: only for CN so far (for now), we need to extend it to len_ and motifs
-    # TODO: This part is very slow, especillay reshaping part... try to improve... think about multi-sample vcf file
-
     #all_samples = df['sample'].drop_duplicates().tolist()
 
     # get all columns starting with 'CN_'
+
     all_samples = [col.replace('CN_', '') for col in df.columns if col.startswith('CN_') and col != 'CN_ref']
     print('all samples:', all_samples)
 
@@ -221,17 +197,18 @@ def compute_cumulative_allele_classification(df, sample_info, col_prefix="CN", s
 
     # computing and counting the set of alleles seen up to each added sample
     prev_sample = None
-    for sample in sample_order:
-        print(f'processing sample {sample}')
+    for i, sample in enumerate(sample_order)[:2]:
+        print(f'processing sample {i}: {sample}')
 
         if df_alleles_set.shape[1] == 3:
             # no sample is added yet
-            df_alleles_set[[f"alleles_upto_{sample}"]] = df[f'{col_prefix}_{sample}'].apply(lambda x: set([x]) if pd.notna(x) else set())
-            df_num_alleles[f"num_alleles_upto_{sample}"] = df_alleles_set[f"alleles_upto_{sample}"].apply(len)
+            df_alleles_set.loc[:, f"{sample}"] = df[f'{col_prefix}_{sample}'].apply(lambda x: set([x]) if pd.notna(x) else set())
+        
         else:
-            df_alleles_set[f"alleles_upto_{sample}"] = df_alleles_set[f"alleles_upto_{prev_sample}"].combine(df[f'{col_prefix}_{sample}'], 
+            df_alleles_set.loc[:, f"{sample}"] = df_alleles_set[f"{prev_sample}"].combine(df[f'{col_prefix}_{sample}'], 
                                                                             lambda s1, s2: s1.union(set([s2])) if pd.notna(s2) else s1)
-            df_num_alleles[f"num_alleles_upto_{sample}"] = df_alleles_set[f"alleles_upto_{sample}"].apply(len)
+        
+        df_num_alleles.loc[:, f"{sample}"] = df_alleles_set[f"{sample}"].apply(len)
 
         prev_sample = sample
 
