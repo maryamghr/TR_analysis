@@ -37,7 +37,7 @@ def main():
     parser_cum.add_argument("--population_df_file", help="CSV with populationdataframe", required=True)
     parser_cum.add_argument("--sample_info_file", help="Sample info file (CSV/TSV)", required=True)
     parser_cum.add_argument("--col_prefix", help="Column prefix for population dataframe (CN, len, seq)", default="CN")
-    parser_cum.add_argument("--output_cum_allele", help="Output file for commulative allele classification", required=True)
+    parser_cum.add_argument("--output_dir", help="Output directory for commulative allele classification", required=True)
     # parser_cum.add_argument("--output_cum_allele_plot", help="Output file for commulative allele classification plot", required=True)
 
     args = parser.parse_args()
@@ -66,8 +66,8 @@ def main():
         pop_df = pd.read_csv(args.population_df_file, sep='\t')
         print(pop_df.head())
         sample_info=get_sample_info_df(args.sample_info_file)
-        cumm_df = compute_cumulative_allele_classification(pop_df, sample_info, col_prefix=args.col_prefix, output=args.output_cum_allele)
-        # plot_cumulative_allele_classification(cum_df, output=args.output_cum_allele_plot)
+        cumm_df_summary = compute_cumulative_allele_classification(pop_df, sample_info, col_prefix=args.col_prefix, outputdir=args.output_dir)
+        plot_cumulative_allele_classification(cumm_df_summary, outputdir=args.output_dir, value_col=args.col_prefix)
 
 
 if __name__ == "__main__":

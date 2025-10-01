@@ -49,7 +49,6 @@ def sample_to_superpop(sample_info_file):
 
 
 
-
 def compute_population_df(directory, output):
     '''
     input: a dictionary including these vcf files:
@@ -160,16 +159,20 @@ def plot_allele_count(cn_allele_counts, len_allele_counts, motif_allele_counts, 
 
 def compute_cumulative_allele_classification(df, sample_info, col_prefix="CN", sample_order=None, 
                                              superpop_order=['AFR', 'AMR', 'EUR', 'EAS', 'SAS'], 
-                                             output='output/population/cumulative_allele.csv'):
+                                             outputdir='output/population/cumm_allele'):
     """
-    Creates a stacked bar plot showing cumulative allele diversity (singleton, biallelic, multiallelic) across samples.
+    Computes cumulative allele diversity (singleton, biallelic, multiallelic) across samples.
+    It shows how this diversity changes as we add samples one by one.
 
     Parameters:
         df: population df, cols: chrom,start,end,motifs,CN_ref,CN_{sample},len_{sample},seq_{sample} for all {sample} in samples
         sample_info: sample information dataframe
         col_prefix (str): Column to count alleles from ('CN_', 'len_', or 'seq_')
-    
-    output:
+        sample_order (list): List of sample names in desired order (optional)
+        superpop_order (list): Order of superpopulations for sorting (optional)
+        output (str): Path to save the cumulative allele classification CSV
+
+    Returns:
         summary_df (pd.DataFrame): DataFrame with columns ['sample', 'singleton', 'biallelic', 'multiallelic', 'superpop']
     """
 
@@ -197,7 +200,7 @@ def compute_cumulative_allele_classification(df, sample_info, col_prefix="CN", s
 
     # computing and counting the set of alleles seen up to each added sample
     prev_sample = None
-    for i, sample in enumerate(sample_order)[:2]:
+    for i, sample in enumerate(sample_order):
         print(f'processing sample {i}: {sample}')
 
         if df_alleles_set.shape[1] == 3:
@@ -232,18 +235,22 @@ def compute_cumulative_allele_classification(df, sample_info, col_prefix="CN", s
 
     summary_df = pd.merge(summary_df, subsample_info, on='sample')
 
-    summary_df.to_csv(output, index=False, sep='\t')
+    summary_df.to_csv(os.path.join(outputdir, f'cumm_{col_prefix}_allele_class_summary.csv'), index=False, sep='\t')
+    df_alleles_set.to_csv(os.path.join(outputdir, f'cumm_{col_prefix}_allele_set.csv'), index=False, sep='\t')
+    df_num_alleles.to_csv(os.path.join(outputdir, f'cumm_{col_prefix}_num_alleles.csv'), index=False, sep='\t')
 
     return summary_df
 
 
-def plot_cumulative_allele_classification(df, sample_order=None, superpop_order=None, palette=None, figsize=(15, 6), output='output/population/commulative_alleles.pdf'):
+def plot_cumulative_allele_classification(df, sample_order=None, superpop_order=None, value_col='CN',
+                                          palette=None, figsize=(15, 6), outputdir='output/population/comm_allele'):
     """
     Creates a stacked bar plot showing cumulative allele diversity (sample, singleton, biallelic, multiallelic) across samples.
 
     Parameters:
-        df (pd.DataFrame): DataFrame with columns ['sample', 'singleton', 'biallelic', 'multiallelic', 'superpop']
-        value_col (str): Column to count alleles from ('CN' or 'len_')
+        df (pd.DataFrame): summary DataFrame (returned by compute_cumulative_allele_classification) 
+            with columns ['sample', 'singleton', 'biallelic', 'multiallelic', 'superpop']
+        value_col (str): Column used to count alleles from ('CN', 'len', or 'seq')
         sample_order (list): List of sample names in desired plotting order (optional)
         superpop_order (list): Order of superpopulations for sorting (optional)
         palette (dict): Dictionary mapping class ('Singleton', etc) to color
@@ -262,7 +269,7 @@ def plot_cumulative_allele_classification(df, sample_order=None, superpop_order=
 
     # Allele type bar colors (clearly distinct)
     allele_colors = {
-        'singleton': 'gold', # '#e41a1c',    # red
+        'singleton': 'teal', # '#e41a1c',    # red
         'biallelic': 'skyblue', # '#377eb8',    # blue
         'multiallelic': 'tomato' # '#4daf4a'  # green
     }
@@ -313,15 +320,17 @@ def plot_cumulative_allele_classification(df, sample_order=None, superpop_order=
 
     # Plot styling
     ax.set_ylabel("Count")
-    ax.set_xlabel("Sample")
-    ax.set_title("Allele Types per Sample (Stacked)")
-    plt.xticks(rotation=45)
+    # ax.set_xlabel("Sample")
+
+    ax.set_xticks(range(len(df)))
+    ax.set_xticklabels(df['sample'], rotation=90, ha="center", fontsize=6)
+
+    ax.set_title("TR alleles polymorphism in population (per added sample)")
 
     # Space for annotations
     plt.subplots_adjust(bottom=0.2, right=0.75)
 
-    ax.set_xticklabels(ax.get_xticklabels(), fontsize=8)
-    plt.savefig(output, format='pdf')
+    plt.savefig(os.path.join(outputdir, f'cumm_{value_col}_allele_classification.pdf'), format='pdf')
     
     return plt
 
