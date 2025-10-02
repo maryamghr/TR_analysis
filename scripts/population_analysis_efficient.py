@@ -10,7 +10,7 @@ from pathlib import Path
 from multiprocessing import Pool
 from functools import partial
 from parse_vcf_files import parse_asm_vcf_tandemtwister
-
+from matplotlib.ticker import ScalarFormatter
 
 
 
@@ -94,66 +94,6 @@ def compute_population_df(directory, output):
     df_pop.to_csv(output, index=False, sep='\t')
 
     return df_pop
-
-
-def count_alleles(df, column="CN", sample_size=70, output="output/population/allele_counts.csv"):
-    '''
-    df: population dataframe
-    column: column to count alleles on (possible values: CN, len_, motifs)
-    sample_size: sample size
-
-    output:
-        allele_count_summary: summary of the number of alleles in the population
-    '''
-
-    pass
-
-    return allele_count_summary
-
-
-def plot_allele_count(cn_allele_counts, len_allele_counts, motif_allele_counts, n=5, output="output/population/multi_facet_allele_barplots.pdf"):
-    '''
-    makes a bar plot of the number of regions with 1,2, ..., n, >n allele counts
-    '''
-
-    def group_allele_counts(count_dict, n=4):
-        series = pd.Series(count_dict)
-        grouped = series[series.index <= n]
-        gtn_sum = series[series.index > n].sum()
-        plot_series = pd.concat([grouped, pd.Series({f'>{n}': gtn_sum})])
-        plot_series.index = plot_series.index.astype(str)
-        return plot_series
-
-    # Prepare data
-    vectors = {
-        "CN alleles": group_allele_counts(cn_allele_counts, n),
-        "length alleles": group_allele_counts(len_allele_counts, n),
-        "motif alleles": group_allele_counts(motif_allele_counts, n),
-    }
-
-    # Setup plot
-    sns.set(style="whitegrid", font_scale=1.2)
-    fig, axes = plt.subplots(1, 3, figsize=(7, 5), sharey=True)
-    fig.supxlabel("Number of Alleles", fontsize=12)
-
-    colors = sns.color_palette("Set2")
-
-    # Plot each vector
-    for ax, (title, data), color in zip(axes, vectors.items(), colors):
-        sns.barplot(x=data.index, y=data.values, ax=ax, color=color)
-        ax.set_title(title, fontsize=8)
-        ax.set_xlabel("")
-        ax.set_ylabel("Number of TR regions" if ax == axes[0] else "")  # only first has ylabel
-        ax.tick_params(axis='x', rotation=0)
-
-    # Overall adjustments
-    plt.suptitle("Allele Count Distribution Across TR Regions", fontsize=12)
-    # plt.xlabel("Number of alleles")
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.savefig(output, format='pdf', bbox_inches='tight')
-    # plt.show()
-
-    #return plt
 
 
 
@@ -243,7 +183,7 @@ def compute_cumulative_allele_classification(df, sample_info, col_prefix="CN", s
 
 
 def plot_cumulative_allele_classification(df, sample_order=None, superpop_order=None, value_col='CN',
-                                          palette=None, figsize=(15, 6), outputdir='output/population/comm_allele'):
+                                          palette=None, figsize=(15, 6), outputdir='output/population/cumm_allele'):
     """
     Creates a stacked bar plot showing cumulative allele diversity (sample, singleton, biallelic, multiallelic) across samples.
 
@@ -305,7 +245,7 @@ def plot_cumulative_allele_classification(df, sample_order=None, superpop_order=
     ]
     labels_superpop = list(df['superpop'].unique())
     legend_superpop = ax.legend(handles_superpop, labels_superpop, title='Superpopulation',
-                                loc='upper left', bbox_to_anchor=(1.02, 1))
+                                loc='upper left', bbox_to_anchor=(1.1, 1))
 
     # Allele type legend (moved outside)
     handles_alleles = [
@@ -314,27 +254,94 @@ def plot_cumulative_allele_classification(df, sample_order=None, superpop_order=
     ]
     labels_alleles = list(allele_colors.keys())
     legend_alleles = ax.legend(handles_alleles, labels_alleles, title='Allele Type',
-                            loc='upper left', bbox_to_anchor=(1.02, 0.6))
+                            loc='upper left', bbox_to_anchor=(1.1, 0.5))
 
     ax.add_artist(legend_superpop)
 
     # Plot styling
-    ax.set_ylabel("Count")
-    # ax.set_xlabel("Sample")
+    ax.set_ylabel("Counts")
+    ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+    ax.ticklabel_format(axis="y", style="sci", scilimits=(0,0)) # use scientific notation
+
+    # Add secondary y-axis (percentages)
+    ax2 = ax.twinx()
+
+    total = sum(df.loc[0, ['singleton', 'biallelic', 'multiallelic']])
+
+    ax2.set_ylim(0, ax.get_ylim()[1] / total * 100)  # scale to percentages
+    ax2.set_ylabel("Percentage (%)")
+
+    # Optionally, set ticks to 0-20-40-...-100
+    ax2.set_yticks(np.linspace(0, 100, 6))
 
     ax.set_xticks(range(len(df)))
     ax.set_xticklabels(df['sample'], rotation=90, ha="center", fontsize=6)
 
-    ax.set_title("TR alleles polymorphism in population (per added sample)")
+    ax.set_title(f"TR {value_col} alleles polymorphism in population (per added sample)")
+
+    ax.margins(x=0.01)
+    plt.tight_layout()
 
     # Space for annotations
     plt.subplots_adjust(bottom=0.2, right=0.75)
 
-    plt.savefig(os.path.join(outputdir, f'cumm_{value_col}_allele_classification.pdf'), format='pdf')
+    # plt.savefig(os.path.join(outputdir, f'cumm_alleles_{value_col}_barplot.pdf'), format='pdf')
     
     return plt
 
+def plot_pie_chart_allele_counts(cumm_df_CN, cumm_df_len, cumm_df_seq):
+    """
+    Plots pie charts showing the overall distribution of singleton, biallelic, and multiallelic loci
+    for CN, length, and sequence alleles.
 
+    Parameters:
+        cumm_df_CN (pd.DataFrame): Cumulative allele classification DataFrame for CN alleles, computed by compute_cumulative_allele_classification
+        cumm_df_len (pd.DataFrame): Cumulative allele classification DataFrame for length alleles, computed by compute_cumulative_allele_classification
+        cumm_df_seq (pd.DataFrame): Cumulative allele classification DataFrame for sequence alleles, computed by compute_cumulative_allele_classification
+    Returns:
+        plt: Matplotlib pyplot object containing the pie charts
+    """
+    
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    # Define colors to match your allele categories
+    colors = ['teal', 'skyblue', 'tomato']
+    labels = ['Singleton', 'Biallelic', 'Multiallelic']
+
+    # Pie chart for CN alleles
+    axes[0].pie(
+        cumm_df_CN[['singleton', 'biallelic', 'multiallelic']].tail(1).values.flatten(),
+        # labels=labels,
+        autopct='%1.1f%%',
+        colors=colors
+    )
+    axes[0].set_title('CN Alleles')
+
+    # Pie chart for length alleles
+    axes[1].pie(
+        cumm_df_len[['singleton', 'biallelic', 'multiallelic']].tail(1).values.flatten(),
+        # labels=labels,
+        autopct='%1.1f%%',
+        colors=colors
+    )
+    axes[1].set_title('Length Alleles')
+
+    # Pie chart for sequence alleles
+    axes[2].pie(
+        cumm_df_seq[['singleton', 'biallelic', 'multiallelic']].tail(1).values.flatten(),
+        # labels=labels,
+        autopct='%1.1f%%',
+        colors=colors
+    )
+    axes[2].set_title('Sequence Alleles')
+
+    # Add a shared legend for allele types
+    handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c in colors]
+    fig.legend(handles, labels, title='Allele Type', loc='upper right')
+
+    plt.tight_layout()
+
+    return fig
 
 def compute_pca(df, output=None):
     '''
