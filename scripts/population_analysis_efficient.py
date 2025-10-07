@@ -362,11 +362,8 @@ def compute_pca(df, sample_info, value_col='CN', std_threshold=0, output=None):
 
     # Step 2a: Encode sequence values if value_col == 'seq'
     if value_col == 'seq':
-        # Each column is a locus; label-encode each locus separately
-        for i, col in enumerate(df_mat.columns):
-            le = LabelEncoder()
-            # Fill NaNs with a placeholder string
-            df_mat[col] = le.fit_transform(df_mat[col].fillna('NA'))
+        # apply label encoding (one-hot encoding) to each column
+        df_mat = df_mat.apply(lambda col: LabelEncoder().fit_transform(col.fillna('NA')), axis=0)
     else:
         # numeric values (CN, len)
         df_mat.fillna(0, inplace=True)
@@ -405,15 +402,24 @@ def compute_pca(df, sample_info, value_col='CN', std_threshold=0, output=None):
         'SAS': 'purple'
     }
     
-    sns.scatterplot(data=pca_df, x='PC1', y='PC2', hue='superpop', palette=superpop_colors)
-    plt.title(f'PCA of {value_col} Profiles by Sample')
-    plt.xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)")
-    plt.ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)")
-    plt.legend(title='Superpopulation')
+    plt.figure(figsize=(10, 6))
+
+    pca_plt = sns.scatterplot(
+        data=pca_df,
+        x='PC1',
+        y='PC2',
+        hue='superpop',
+        palette=superpop_colors,
+    )
+
+    pca_plt.set_title(f'PCA of {value_col} Profiles by Sample')
+    pca_plt.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)")
+    pca_plt.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)")
+    pca_plt.legend(title='Superpopulation', bbox_to_anchor=(1.05, 1), loc='upper left')
+
     plt.tight_layout()
-    # plt.show()
     
-    return pca_df, plt
+    return pca_df, pca_plt
 
 
 
